@@ -9,16 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Loader2, Calendar as CalendarIcon, MapPin, Leaf, ShieldAlert, ImagePlus } from "lucide-react";
+import { ArrowLeft, Loader2, Calendar as CalendarIcon, MapPin, Leaf, ShieldAlert, ImagePlus, Ruler, X, DollarSign, Sun } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const FARM_TYPES = [
-  "สวนหลังบ้าน", "ดาดฟ้าตึก", "ที่ดินว่างเปล่า", "ระเบียงคอนโด", "สวนในหมู่บ้าน", "อื่นๆ"
-];
-
-const AMENITIES = [
-  "แหล่งน้ำ", "อุปกรณ์ทำสวน", "แสงแดดเต็มวัน", "ร่มเงา", "รั้วรอบขอบชิด", "ถังหมักปุ๋ย", "ที่จอดรถ", "ห้องน้ำ", "กล้องวงจรปิด"
-];
+const FARM_TYPES = ["สวนหลังบ้าน", "ดาดฟ้าตึก", "ที่ดินว่างเปล่า", "ระเบียงคอนโด", "สวนในหมู่บ้าน", "อื่นๆ"];
+const AREA_UNITS = ["ตร.ม.", "ตร.ว.", "งาน", "ไร่"];
+const PRICE_UNITS = ["บาท/เดือน", "บาท/ปี", "บาท/รอบการปลูก", "แบ่งผลผลิต (ไม่มีค่าใช้จ่าย)"];
+const SUN_TYPES = ["แดดจัดตลอดวัน (Full Sun)", "แดดครึ่งวันเช้า", "แดดครึ่งวันบ่าย", "ร่มรำไร / แสงน้อย (Shade)"];
+const AMENITIES = ["แหล่งน้ำ", "อุปกรณ์ทำสวน", "แสงแดดเต็มวัน", "ร่มเงา", "รั้วรอบขอบชิด", "ถังหมักปุ๋ย", "ที่จอดรถ", "ห้องน้ำ", "กล้องวงจรปิด", "Wi-Fi"];
 
 export default function SpaceForm() {
   const { id } = useParams();
@@ -29,51 +27,63 @@ export default function SpaceForm() {
 
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEditing);
+  
+  const [areaValue, setAreaValue] = useState("");
+  const [areaUnit, setAreaUnit] = useState("ตร.ม.");
+
   const [form, setForm] = useState({
     title: "",
-    description: "",
+    description: "", // เพิ่มช่องนี้
     address: "",
-    area_size: "",
     tags: "",
     farm_type: "",
     available_from: "",
     available_to: "",
     rules: "",
     amenities: [] as string[],
+    price: "",
+    price_unit: "บาท/เดือน",
+    sunlight: "" // เพิ่มช่องนี้
   });
   
-  // State สำหรับจัดการรูปภาพ
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  // Gallery Logic
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+  const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
+  const [existingGallery, setExistingGallery] = useState<string[]>([]);
 
   useEffect(() => {
-    if (isEditing && user) {
-      fetchSpace();
-    }
+    if (isEditing && user) fetchSpace();
   }, [id, user]);
 
   const fetchSpace = async () => {
-    const { data, error } = await supabase
-      .from("urban_farm_spaces")
-      .select("*")
-      .eq("id", id)
-      .single();
-
+    const { data, error } = await supabase.from("urban_farm_spaces").select("*").eq("id", id).single();
     if (!error && data) {
+      let loadedAreaValue = "", loadedAreaUnit = "ตร.ม.";
+      if (data.area_size) {
+        const parts = data.area_size.split(" ");
+        if (parts.length >= 2) { loadedAreaValue = parts[0]; loadedAreaUnit = parts[1]; } 
+        else { loadedAreaValue = data.area_size; }
+      }
+
+      setAreaValue(loadedAreaValue);
+      setAreaUnit(loadedAreaUnit);
       setForm({
         title: data.title,
         description: data.description || "",
         address: data.address,
-        area_size: data.area_size || "",
         tags: data.tags || "",
         farm_type: data.farm_type || "",
         available_from: data.available_from || "",
         available_to: data.available_to || "",
         rules: data.rules || "",
         amenities: data.amenities || [],
+        price: data.price ? data.price.toString() : "",
+        price_unit: data.price_unit || "บาท/เดือน",
+        sunlight: data.sunlight || "" // ดึงข้อมูลแดด
       });
-      // ดึงรูปมาโชว์ถ้ามี
-      if (data.image_url) setImagePreview(data.image_url);
+      
+      const images = data.gallery || (data.image_url ? [data.image_url] : []);
+      setExistingGallery(images);
     }
     setFetching(false);
   };
@@ -81,23 +91,29 @@ export default function SpaceForm() {
   const handleAmenityChange = (item: string) => {
     setForm(prev => ({
       ...prev,
-      amenities: prev.amenities.includes(item)
-        ? prev.amenities.filter(i => i !== item)
-        : [...prev.amenities, item]
+      amenities: prev.amenities.includes(item) ? prev.amenities.filter(i => i !== item) : [...prev.amenities, item]
     }));
   };
 
-  // ฟังก์ชันเลือกรูปภาพ
   const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        toast({ title: "ไฟล์ใหญ่เกินไป", description: "กรุณาใช้รูปขนาดไม่เกิน 5MB", variant: "destructive" });
-        return;
-      }
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
+    const files = Array.from(e.target.files || []);
+    if (files.length + galleryFiles.length + existingGallery.length > 5) {
+      toast({ title: "จำกัดรูปภาพ", description: "อัปโหลดได้สูงสุด 5 รูป", variant: "destructive" });
+      return;
     }
+    
+    const newPreviews = files.map(file => URL.createObjectURL(file));
+    setGalleryFiles(prev => [...prev, ...files]);
+    setGalleryPreviews(prev => [...prev, ...newPreviews]);
+  };
+
+  const removeNewImage = (index: number) => {
+    setGalleryFiles(prev => prev.filter((_, i) => i !== index));
+    setGalleryPreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingImage = (index: number) => {
+    setExistingGallery(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -109,35 +125,28 @@ export default function SpaceForm() {
 
     setLoading(true);
 
-    // Logic อัปโหลดรูป
-    let imageUrl = imagePreview; // ใช้รูปเดิมถ้าไม่ได้อัปใหม่ (กรณีแก้ไข)
-    
-    if (imageFile) {
-      const fileExt = imageFile.name.split('.').pop();
+    const uploadedUrls: string[] = [];
+    for (const file of galleryFiles) {
+      const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random()}.${fileExt}`;
       const filePath = `${user!.id}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('farm-images')
-        .upload(filePath, imageFile);
-
-      if (uploadError) {
-        toast({ title: "อัปโหลดรูปไม่สำเร็จ", description: uploadError.message, variant: "destructive" });
-        setLoading(false);
-        return;
+      const { error: uploadError } = await supabase.storage.from('farm-images').upload(filePath, file);
+      if (!uploadError) {
+        const { data: { publicUrl } } = supabase.storage.from('farm-images').getPublicUrl(filePath);
+        uploadedUrls.push(publicUrl);
       }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('farm-images')
-        .getPublicUrl(filePath);
-      
-      imageUrl = publicUrl;
     }
+
+    const finalGallery = [...existingGallery, ...uploadedUrls];
+    const mainImage = finalGallery.length > 0 ? finalGallery[0] : null;
 
     const spaceData = { 
       ...form, 
+      area_size: `${areaValue} ${areaUnit}`,
       owner_id: user!.id,
-      image_url: imageUrl // บันทึก URL ลง DB
+      image_url: mainImage,
+      gallery: finalGallery,
+      price: parseFloat(form.price) || 0
     };
 
     let error;
@@ -173,150 +182,159 @@ export default function SpaceForm() {
       </header>
 
       <main className="container mx-auto max-w-2xl px-4 py-8">
-        <Card className="shadow-lg border-0 rounded-2xl overflow-hidden">
-          <div className="h-2 bg-primary w-full"></div>
-          <CardContent className="p-6 sm:p-8">
-            <form onSubmit={handleSubmit} className="space-y-8">
-              
-              {/* ส่วนอัปโหลดรูปภาพ */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-primary font-semibold border-b pb-2">
-                  <ImagePlus className="h-5 w-5" />
-                  <h2>รูปภาพพื้นที่</h2>
-                </div>
-                
-                <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl p-6 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer relative min-h-[200px]">
-                  <Input 
-                    type="file" 
-                    accept="image/*" 
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    onChange={handleImageChange}
-                  />
-                  
-                  {imagePreview ? (
-                    <div className="relative w-full max-h-[300px] rounded-lg overflow-hidden">
-                      <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity z-20">
-                         <p className="text-white font-medium">คลิกเพื่อเปลี่ยนรูป</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-primary">
-                        <ImagePlus className="w-8 h-8" />
-                      </div>
-                      <p className="font-medium text-slate-700">คลิกเพื่ออัปโหลดรูปภาพ</p>
-                      <p className="text-sm text-slate-500 mt-1">รองรับไฟล์ JPG, PNG (ไม่เกิน 5MB)</p>
-                    </div>
-                  )}
-                </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          
+          {/* Gallery Section */}
+          <Card className="shadow-sm border-slate-200 rounded-2xl overflow-hidden">
+            <div className="bg-slate-50 border-b p-4 flex items-center gap-2 font-semibold text-slate-700">
+               <ImagePlus className="w-5 h-5 text-primary" /> รูปภาพพื้นที่ (สูงสุด 5 รูป)
+            </div>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+                {existingGallery.map((url, idx) => (
+                  <div key={`exist-${idx}`} className="relative aspect-square rounded-xl overflow-hidden group border">
+                    <img src={url} alt="Existing" className="w-full h-full object-cover" />
+                    <button type="button" onClick={() => removeExistingImage(idx)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                {galleryPreviews.map((url, idx) => (
+                  <div key={`new-${idx}`} className="relative aspect-square rounded-xl overflow-hidden group border border-primary/20">
+                    <img src={url} alt="New" className="w-full h-full object-cover" />
+                    <button type="button" onClick={() => removeNewImage(idx)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                {(existingGallery.length + galleryFiles.length < 5) && (
+                  <label className="aspect-square rounded-xl border-2 border-dashed border-slate-300 hover:border-primary hover:bg-primary/5 flex flex-col items-center justify-center cursor-pointer transition-colors">
+                    <ImagePlus className="w-8 h-8 text-slate-400" />
+                    <span className="text-xs text-slate-500 mt-2">เพิ่มรูปภาพ</span>
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} />
+                  </label>
+                )}
               </div>
+            </CardContent>
+          </Card>
 
-              {/* ข้อมูลทั่วไป */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-primary font-semibold border-b pb-2">
-                  <MapPin className="h-5 w-5" />
-                  <h2>ข้อมูลทั่วไป</h2>
-                </div>
-                
-                <div className="space-y-2">
+          {/* Info Section */}
+          <Card className="shadow-sm border-slate-200 rounded-2xl overflow-hidden">
+             <div className="bg-slate-50 border-b p-4 flex items-center gap-2 font-semibold text-slate-700">
+               <MapPin className="w-5 h-5 text-primary" /> ข้อมูลทั่วไป
+            </div>
+            <CardContent className="p-6 space-y-4">
+               <div>
                   <Label>ชื่อพื้นที่ *</Label>
-                  <Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="เช่น สวนผักหลังบ้านลาดพร้าว" className="h-11" required />
-                </div>
+                  <Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="เช่น สวนผักหลังบ้านลาดพร้าว" className="h-11 rounded-xl mt-1.5" required />
+               </div>
+               
+               {/* Description Field (New!) */}
+               <div>
+                  <Label>รายละเอียดพื้นที่ *</Label>
+                  <Textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="อธิบายเกี่ยวกับพื้นที่ของคุณ เช่น ดินดีไหม น้ำท่วมไหม..." className="rounded-xl mt-1.5" rows={4} required />
+               </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>ประเภทพื้นที่</Label>
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label>ประเภท</Label>
                     <Select value={form.farm_type} onValueChange={v => setForm({...form, farm_type: v})}>
-                      <SelectTrigger className="h-11"><SelectValue placeholder="เลือกประเภท" /></SelectTrigger>
-                      <SelectContent>
-                        {FARM_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                      </SelectContent>
+                      <SelectTrigger className="h-11 rounded-xl mt-1.5"><SelectValue placeholder="เลือกประเภท" /></SelectTrigger>
+                      <SelectContent>{FARM_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label>ขนาดพื้นที่ (ตร.ม.)</Label>
-                    <Input value={form.area_size} onChange={e => setForm({...form, area_size: e.target.value})} placeholder="เช่น 4x4, 20" className="h-11" />
+                  <div>
+                    <Label>ขนาดพื้นที่</Label>
+                    <div className="flex gap-2 mt-1.5">
+                        <div className="relative flex-1">
+                            <Ruler className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                            <Input type="number" value={areaValue} onChange={e => setAreaValue(e.target.value)} placeholder="ระบุขนาด" className="pl-9 h-11 rounded-xl" />
+                        </div>
+                        <Select value={areaUnit} onValueChange={setAreaUnit}>
+                          <SelectTrigger className="w-[100px] h-11 rounded-xl"><SelectValue /></SelectTrigger>
+                          <SelectContent>{AREA_UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                        </Select>
+                    </div>
                   </div>
-                </div>
-
-                <div className="space-y-2">
+               </div>
+               
+               <div>
                   <Label>ที่อยู่ / จุดสังเกต *</Label>
-                  <Textarea value={form.address} onChange={e => setForm({...form, address: e.target.value})} placeholder="บ้านเลขที่ ซอย ถนน เขต..." required className="resize-none" rows={3} />
-                </div>
-              </div>
+                  <Textarea value={form.address} onChange={e => setForm({...form, address: e.target.value})} placeholder="รายละเอียดที่ตั้ง..." className="rounded-xl mt-1.5" rows={2} required />
+               </div>
+               
+               <div className="bg-green-50/50 p-4 rounded-xl border border-green-100">
+                  <Label className="text-green-800">ค่าเช่า / ค่าใช้จ่าย</Label>
+                  <div className="flex gap-2 mt-2">
+                     <div className="relative flex-1">
+                        <DollarSign className="absolute left-3 top-3.5 h-4 w-4 text-green-600" />
+                        <Input type="number" value={form.price} onChange={e => setForm({...form, price: e.target.value})} placeholder="เช่น 1500" className="pl-9 h-11 rounded-xl border-green-200 focus-visible:ring-green-500" />
+                     </div>
+                     <Select value={form.price_unit} onValueChange={v => setForm({...form, price_unit: v})}>
+                        <SelectTrigger className="w-[160px] h-11 rounded-xl border-green-200"><SelectValue /></SelectTrigger>
+                        <SelectContent>{PRICE_UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                     </Select>
+                  </div>
+               </div>
+            </CardContent>
+          </Card>
 
-              {/* รายละเอียดการใช้งาน */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-primary font-semibold border-b pb-2">
-                  <Leaf className="h-5 w-5" />
-                  <h2>การใช้งาน</h2>
-                </div>
+          {/* Details & Sunlight Section */}
+          <Card className="shadow-sm border-slate-200 rounded-2xl overflow-hidden">
+             <div className="bg-slate-50 border-b p-4 flex items-center gap-2 font-semibold text-slate-700">
+               <Leaf className="w-5 h-5 text-primary" /> สภาพแวดล้อม & สิ่งอำนวยความสะดวก
+            </div>
+            <CardContent className="p-6 space-y-5">
+               
+               {/* Sunlight Field (New!) */}
+               <div>
+                  <Label>สภาพแสงแดด (สำคัญสำหรับพืช)</Label>
+                  <div className="relative mt-1.5">
+                    <Sun className="absolute left-3 top-3.5 h-4 w-4 text-orange-500" />
+                    <Select value={form.sunlight} onValueChange={v => setForm({...form, sunlight: v})}>
+                        <SelectTrigger className="pl-9 h-11 rounded-xl"><SelectValue placeholder="เลือกสภาพแสงแดด" /></SelectTrigger>
+                        <SelectContent>{SUN_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+               </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
+               <div className="grid grid-cols-2 gap-4">
+                  <div>
                     <Label>ว่างตั้งแต่</Label>
-                    <div className="relative">
-                      <CalendarIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input type="date" className="pl-9 h-11" value={form.available_from} onChange={e => setForm({...form, available_from: e.target.value})} />
-                    </div>
+                    <div className="relative mt-1.5"><CalendarIcon className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><Input type="date" className="pl-9 h-11 rounded-xl" value={form.available_from} onChange={e => setForm({...form, available_from: e.target.value})} /></div>
                   </div>
-                  <div className="space-y-2">
+                  <div>
                     <Label>ถึงวันที่</Label>
-                    <div className="relative">
-                      <CalendarIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input type="date" className="pl-9 h-11" value={form.available_to} onChange={e => setForm({...form, available_to: e.target.value})} />
-                    </div>
+                    <div className="relative mt-1.5"><CalendarIcon className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><Input type="date" className="pl-9 h-11 rounded-xl" value={form.available_to} onChange={e => setForm({...form, available_to: e.target.value})} /></div>
                   </div>
-                </div>
-
-                <div className="space-y-3">
-                  <Label>สิ่งอำนวยความสะดวก</Label>
+               </div>
+               
+               <div>
+                  <Label className="mb-3 block">สิ่งอำนวยความสะดวก</Label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {AMENITIES.map(item => (
-                      <div key={item} className={`flex items-center space-x-2 border rounded-lg p-3 transition-colors ${form.amenities.includes(item) ? "border-primary bg-primary/5" : "border-slate-200"}`}>
-                        <Checkbox 
-                          id={item} 
-                          checked={form.amenities.includes(item)}
-                          onCheckedChange={() => handleAmenityChange(item)}
-                        />
-                        <label htmlFor={item} className="text-sm cursor-pointer w-full">{item}</label>
+                      <div key={item} className={`flex items-center space-x-2 border rounded-xl p-3 transition-all cursor-pointer ${form.amenities.includes(item) ? "border-primary bg-primary/5 shadow-sm" : "border-slate-200 hover:bg-slate-50"}`}>
+                        <Checkbox id={item} checked={form.amenities.includes(item)} onCheckedChange={() => handleAmenityChange(item)} />
+                        <label htmlFor={item} className="text-sm cursor-pointer w-full select-none">{item}</label>
                       </div>
                     ))}
                   </div>
-                </div>
+               </div>
 
-                <div className="space-y-2">
-                  <Label>Tags (คั่นด้วยจุลภาค)</Label>
-                  <Input value={form.tags} onChange={e => setForm({...form, tags: e.target.value})} placeholder="ผักสลัด, ปลอดสาร, มือใหม่" className="h-11" />
-                </div>
-              </div>
+               <div>
+                 <Label className="mb-2 block flex items-center gap-2"><ShieldAlert className="w-4 h-4" /> กฎระเบียบเพิ่มเติม</Label>
+                 <Textarea value={form.rules} onChange={e => setForm({...form, rules: e.target.value})} placeholder="เช่น ห้ามส่งเสียงดังหลัง 2 ทุ่ม..." className="rounded-xl" rows={3} />
+               </div>
+            </CardContent>
+          </Card>
 
-              {/* กฎระเบียบ */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-primary font-semibold border-b pb-2">
-                  <ShieldAlert className="h-5 w-5" />
-                  <h2>ข้อตกลงและกฎระเบียบ</h2>
-                </div>
-                <div className="space-y-2">
-                  <Textarea 
-                    value={form.rules} 
-                    onChange={e => setForm({...form, rules: e.target.value})} 
-                    placeholder="เช่น ห้ามใช้สารเคมี, เข้าออกได้เฉพาะเวลา 08.00-18.00..." 
-                    className="min-h-[100px]"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 flex gap-4">
-                <Button type="button" variant="outline" className="flex-1 h-11 rounded-xl" onClick={() => navigate(-1)}>ยกเลิก</Button>
-                <Button type="submit" className="flex-1 h-11 rounded-xl shadow-md bg-primary hover:bg-primary/90" disabled={loading}>
-                  {loading ? <Loader2 className="animate-spin mr-2" /> : "บันทึกข้อมูลพื้นที่"}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+          <div className="flex gap-4 pt-2">
+            <Button type="button" variant="outline" className="flex-1 h-12 rounded-xl" onClick={() => navigate(-1)}>ยกเลิก</Button>
+            <Button type="submit" className="flex-1 h-12 rounded-xl shadow-lg bg-primary hover:bg-primary/90" disabled={loading}>
+              {loading ? <Loader2 className="animate-spin mr-2" /> : "บันทึกข้อมูล"}
+            </Button>
+          </div>
+        </form>
       </main>
     </div>
   );

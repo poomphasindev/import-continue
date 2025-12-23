@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Sprout, MapPin, TreePine, ArrowRight, LayoutDashboard, LogOut, Cloud, Sun, Leaf, Heart, BookOpen } from "lucide-react"; // Import BookOpen
+import { Sprout, MapPin, TreePine, ArrowRight, LayoutDashboard, LogOut, Cloud, Sun, Leaf, Heart, BookOpen } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -36,20 +36,12 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-[#F8FAF9] font-sans flex flex-col relative overflow-hidden">
       
-      {/* Background Decoration */}
+      {/* Background Decoration (เก็บไว้เพราะน่ารักและไม่รก) */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[10%] left-[5%] text-green-200 animate-float-slow opacity-50">
-          <Cloud className="w-24 h-24" />
-        </div>
-        <div className="absolute top-[15%] right-[10%] text-yellow-200 animate-pulse-soft opacity-60">
-          <Sun className="w-32 h-32" />
-        </div>
-        <div className="absolute bottom-[20%] left-[10%] text-emerald-100 animate-float delay-700">
-          <Leaf className="w-16 h-16 rotate-12" />
-        </div>
-        <div className="absolute bottom-[10%] right-[5%] text-primary/10 animate-float-slow delay-1000">
-          <TreePine className="w-40 h-40" />
-        </div>
+        <div className="absolute top-[10%] left-[5%] text-green-200 animate-float-slow opacity-50"><Cloud className="w-24 h-24" /></div>
+        <div className="absolute top-[15%] right-[10%] text-yellow-200 animate-pulse-soft opacity-60"><Sun className="w-32 h-32" /></div>
+        <div className="absolute bottom-[20%] left-[10%] text-emerald-100 animate-float delay-700"><Leaf className="w-16 h-16 rotate-12" /></div>
+        <div className="absolute bottom-[10%] right-[5%] text-primary/10 animate-float-slow delay-1000"><TreePine className="w-40 h-40" /></div>
       </div>
 
       {/* Navbar */}
@@ -65,14 +57,9 @@ export default function Landing() {
           </Link>
           
           <div className="flex items-center gap-4">
-            
-            {/* ปุ่มคู่มือการใช้งาน (เพิ่มใหม่) */}
             <Button variant="ghost" asChild className="hidden md:flex text-slate-500 hover:text-primary hover:bg-green-50 rounded-full px-4 gap-2 transition-all">
-                <Link to="/guide">
-                    <BookOpen className="w-4 h-4" /> คู่มือการใช้งาน
-                </Link>
+                <Link to="/guide"><BookOpen className="w-4 h-4" /> คู่มือการใช้งาน</Link>
             </Button>
-
             {user ? (
               <Button variant="ghost" onClick={() => signOut()} className="text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-full px-4">
                 <LogOut className="mr-2 h-4 w-4" /> ออกจากระบบ
@@ -87,11 +74,11 @@ export default function Landing() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 relative z-10">
+      <main className="flex-1 relative z-10 flex flex-col justify-center">
         {user ? (
-          <section className="py-20 px-4 min-h-[85vh] flex flex-col justify-center items-center">
+          // --- Logged In View ---
+          <section className="py-20 px-4 min-h-[80vh] flex flex-col justify-center items-center">
             <div className="container mx-auto max-w-4xl text-center">
-              
               <Link to="/profile">
                 <div className="relative inline-block mb-8 group cursor-pointer">
                   <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-emerald-600 rounded-full blur opacity-40 group-hover:opacity-75 transition duration-500 animate-pulse"></div>
@@ -102,10 +89,7 @@ export default function Landing() {
                     </AvatarFallback>
                   </Avatar>
                   <div className="absolute bottom-1 right-1 bg-white rounded-full p-2 shadow-lg border border-slate-100 z-20 animate-bounce">
-                    {userRole === 'landowner' ? 
-                      <MapPin className="h-6 w-6 text-orange-500" /> : 
-                      <Sprout className="h-6 w-6 text-green-500" />
-                    }
+                    {userRole === 'landowner' ? <MapPin className="h-6 w-6 text-orange-500" /> : <Sprout className="h-6 w-6 text-green-500" />}
                   </div>
                 </div>
               </Link>
@@ -113,7 +97,6 @@ export default function Landing() {
               <h1 className="text-4xl md:text-5xl font-extrabold mb-4 text-slate-800 tracking-tight animate-in slide-in-from-bottom-4 duration-700">
                 {greeting}, <span className="bg-clip-text text-transparent bg-gradient-to-r from-green-600 to-emerald-500">{userProfile?.name || user.email?.split('@')[0]}</span> !👋
               </h1>
-              
               <p className="text-xl text-slate-500 mb-12 max-w-lg mx-auto leading-relaxed animate-in slide-in-from-bottom-5 delay-150 duration-700">
                 วันนี้อากาศดีนะ! พร้อมที่จะ {userRole === 'landowner' ? 'ดูแลพื้นที่ของคุณ' : 'ไปดูผักที่ปลูกไว้'} หรือยัง?
               </p>
@@ -139,12 +122,11 @@ export default function Landing() {
                   </div>
                 </Link>
               </div>
-
             </div>
           </section>
         ) : (
-          /* Public Hero Section */
-          <section className="relative py-20 lg:py-32 px-4">
+          // --- Public Landing View (Clean Version) ---
+          <section className="relative py-20 px-4 min-h-[85vh] flex flex-col justify-center">
             <div className="container mx-auto text-center max-w-5xl space-y-8 relative z-10">
               <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-white border border-green-100 shadow-md text-green-700 text-sm font-semibold mb-4 animate-in fade-in slide-in-from-top-4 duration-700 hover:scale-105 transition-transform cursor-default">
                 <span className="relative flex h-3 w-3">
@@ -165,6 +147,7 @@ export default function Landing() {
                 แพลตฟอร์มจับคู่ระหว่าง <strong className="text-green-600">เจ้าของที่ดิน</strong> และ <strong className="text-emerald-600">นักปลูกผัก</strong> เพื่อสร้างแหล่งอาหารปลอดภัยและสังคมที่ยั่งยืน
               </p>
 
+              {/* Role Cards (จุดสำคัญที่ต้องเด่น) */}
               <div className="grid md:grid-cols-2 gap-6 mt-16 max-w-4xl mx-auto animate-in slide-in-from-bottom-10 delay-300 duration-700">
                 <Link to="/auth?role=landowner&tab=signup" className="group">
                   <Card className="h-full border-none shadow-lg hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 bg-white/80 backdrop-blur-sm rounded-[2rem] overflow-hidden relative">
@@ -203,7 +186,7 @@ export default function Landing() {
         )}
       </main>
 
-      <footer className="py-8 bg-white border-t border-slate-100">
+      <footer className="py-8 bg-white border-t border-slate-100 mt-auto">
         <div className="container mx-auto px-4 text-center">
           <div className="flex flex-col items-center justify-center gap-3 mb-4">
             <div className="p-3 bg-green-50 rounded-full animate-float">
